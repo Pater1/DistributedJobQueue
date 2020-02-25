@@ -3,11 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.29806.167
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JobQueueTestProj", "JobQueueTestProj\JobQueueTestProj.csproj", "{28F8024A-5338-4B4B-88E4-A9CCFC432362}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "JobQueueRestApi", "JobQueueTestProj\JobQueueRestApi.csproj", "{28F8024A-5338-4B4B-88E4-A9CCFC432362}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DistributedJobQueue", "DistributedJobQueue\DistributedJobQueue.csproj", "{F6693BA4-246A-4C63-A59B-8CB8925B479D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistributedJobQueue", "DistributedJobQueue\DistributedJobQueue.csproj", "{F6693BA4-246A-4C63-A59B-8CB8925B479D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DistributedJobQueueTests", "DistributedJobQueueTests\DistributedJobQueueTests.csproj", "{24A61459-65C0-42FE-A6C7-7258E7C41B26}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DistributedJobQueueTests", "DistributedJobQueueTests\DistributedJobQueueTests.csproj", "{24A61459-65C0-42FE-A6C7-7258E7C41B26}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
