@@ -14,6 +14,7 @@ namespace DistributedJobQueue.Queue
     {
         private List<(string[] reqTags, IJob job)> sudoQueue = new List<(string[] reqTags, IJob job)>();
         private SemaphoreSlim locker = new SemaphoreSlim(1, 1);
+        private List<Guid> InProcess = new List<Guid>();
         public async Task<(bool, IJob)> TryDequeueAsync(IRequirement requirementsFulfillable = null)
         {
             if (requirementsFulfillable == null) requirementsFulfillable = new NoRequirement();
@@ -36,6 +37,7 @@ namespace DistributedJobQueue.Queue
             if(job != null)
             {
                 sudoQueue.RemoveAt(index);
+                InProcess.Add(job.JobId);
             }
 
             locker.Release();
@@ -46,6 +48,11 @@ namespace DistributedJobQueue.Queue
         public async Task<bool> TryEnqueueAsync(IJob job)
         {
             bool alreadyContains;
+
+            if(job.JobId == default)
+            {
+                job.JobId = Guid.NewGuid();
+            }
 
             await locker.WaitAsync();
 
@@ -58,6 +65,18 @@ namespace DistributedJobQueue.Queue
             locker.Release();
 
             return !alreadyContains;
+        }
+
+        public async Task<bool> WaitForCompletionAsync(Guid jobId)
+        {
+            //TODO: detect if job asks to wait on itself & error
+
+            while (InProcess.Contains(jobId))
+            {
+                await Task.Delay(10);
+            }
+
+            return true;
         }
     }
 }

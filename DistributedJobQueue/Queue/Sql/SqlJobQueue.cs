@@ -20,6 +20,8 @@ namespace DistributedJobQueue.Queue.Sql
         private string QueueTable { get; } = "JobQueue";
         private string RequirementsTable { get; } = "JobRequirements";
         private string InProcessTable { get; } = "JobsInProcess";
+        private string UnfinishedJobs { get; } = "UnfinishedJobs";
+        private List<Guid> InProcessLocal { get; } = new List<Guid>();
 
         public async Task<(bool, IJob)> TryDequeueAsync(IRequirement requirementsFulfillable = null)
         {
@@ -87,6 +89,8 @@ namespace DistributedJobQueue.Queue.Sql
                         q
                     ).ExecuteNonQuery();
 
+                    InProcessLocal.Add(jb.Item1.JobId);
+
                     return (true,
                         new OnCompleteJobWrapper(
                             new HeartbeatJobWrapper(jb.Item1, TimeSpan.FromSeconds(1), async () =>
@@ -95,9 +99,14 @@ namespace DistributedJobQueue.Queue.Sql
                                 ).ExecuteNonQuery()
                             )
                         , 
-                            async () => new Query<DbConnection>(ConnectionFactory,
+                            async () =>
+                            {
+                                InProcessLocal.Remove(jb.Item1.JobId);
+                                new Query<DbConnection>(ConnectionFactory,
                                     $"DELETE FROM {InProcessTable} WHERE JobId = '{jb.Item1.JobId.ToString()}';"
-                                ).ExecuteNonQuery()
+                                ).ExecuteNonQuery();
+                            }
+
                         )
                     );
                 }
@@ -135,6 +144,22 @@ namespace DistributedJobQueue.Queue.Sql
 
             new Query<DbConnection>(ConnectionFactory, query).ExecuteNonQuery();
             return Task.FromResult(true);
+        }
+
+        public async Task<bool> WaitForCompletionAsync(Guid jobId)
+        {
+            //TODO: detect if job asks to wait on itself & error
+
+            Query<DbConnection> q = new Query<DbConnection>(ConnectionFactory,
+                $"SELECT COUNT(*) FROM {UnfinishedJobs} WHERE JobId = '{jobId.ToString()}';"
+            );//.ExecuteScalar();
+
+            while (InProcessLocal.Contains(jobId) || q.ExecuteScalar<int>() > 0)
+            {
+                await Task.Delay(10);
+            }
+
+            return true;
         }
     }
 }

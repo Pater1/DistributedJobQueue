@@ -72,6 +72,11 @@ namespace DistributedJobQueue.RabbitMq
             return Task.FromResult(true);
         }
 
+        public async Task<bool> WaitForCompletionAsync(Guid jobId)
+        {
+            throw new NotImplementedException();
+        }
+
         public void Dispose()
         {
             Channel.Close();

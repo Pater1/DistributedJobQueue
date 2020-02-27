@@ -31,6 +31,23 @@ namespace DistributedJobQueue.Queue.Sql
                 }
             }
         }
+        public T ExecuteScalar<T>()
+        {
+            return (T)ExecuteScalar();
+        }
+        public object ExecuteScalar()
+        {
+            using (Conn connection = ConnectionFactory())
+            {
+                connection.Open();
+                using (DbCommand command = connection.CreateCommand())
+                {
+                    command.CommandTimeout = 0;
+                    command.CommandText = Queary;
+                    return command.ExecuteScalar();
+                }
+            }
+        }
         public IEnumerable<IDataRecord> EnumerateRaw()
         {
             using (Conn connection = ConnectionFactory())
