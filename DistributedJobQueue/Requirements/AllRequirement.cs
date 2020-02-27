@@ -1,39 +1,39 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace DistributedJobQueue.Requirements
 {
     [System.Serializable]
-    public readonly struct AllRequirement: IRequirement, IEnumerable<IRequirement>
+    public class AllRequirement: IEnumerableRequirement
     {
-        private IEnumerable<IRequirement> SubRequirements { get; }
+        public List<IRequirement> SubRequirements { get; }
+
+        IEnumerable<IRequirement> IEnumerableRequirement.SubRequirements => SubRequirements;
+
+        public AllRequirement()
+        {
+            SubRequirements = new List<IRequirement>();
+        }
+        public AllRequirement(params IRequirement[] subRequirements)
+        {
+            SubRequirements = subRequirements.ToList();
+        }
         public AllRequirement(IEnumerable<IRequirement> subRequirements)
         {
-            SubRequirements = subRequirements;
+            SubRequirements = subRequirements.ToList();
         }
-        public async Task<bool> FullfillsAsync(IRequirement toComp)
+        public Task<bool> FullfillsAsync(IRequirement toComp)
         {
-            foreach (IRequirement requirement in SubRequirements)
-            {
-                if (!(await requirement.FullfillsAsync(toComp)))
-                {
-                    return false;
-                }
-            }
-            return true;
+            return this.CheckFulfills(toComp);
         }
 
-        public IEnumerator<IRequirement> GetEnumerator()
+        public bool Aggregate(bool a, bool b)
         {
-            return SubRequirements.GetEnumerator();
-        }
-
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            return SubRequirements.GetEnumerator();
+            return a && b;
         }
     }
 }

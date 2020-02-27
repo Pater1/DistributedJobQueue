@@ -1,4 +1,5 @@
-﻿using DistributedJobQueue.Queue;
+﻿using DistributedJobQueue.Job;
+using DistributedJobQueue.Queue;
 using DistributedJobQueue.Requirements;
 using System;
 using System.Collections.Generic;
@@ -12,24 +13,25 @@ namespace DistributedJobQueue.Client
     {
         public List<(IRequirement req, string[] tags)> _fulfilledRequirements = new List<(IRequirement req, string[] tags)>();
 
-        public BasicJobClient(IJobQueue jobQueue, IEnumerable<IRequirement> requirements = null)
+        public BasicJobClient() { }
+        public BasicJobClient(IJobQueue jobQueue, IEnumerable<IRequirement> fulfilledRequirements = null)
         {
-            if(requirements != null)
+            if(fulfilledRequirements != null)
             {
-                _fulfilledRequirements = requirements.Select(x => (x, x.GetRequirementTags())).ToList();
+                _fulfilledRequirements = fulfilledRequirements.Select(x => (x, x.GetRequirementTags())).ToList();
             }
-            JobQueue = jobQueue;
+            Queue = jobQueue;
         }
 
         public IEnumerable<IRequirement> FulfilledRequirements => _fulfilledRequirements.Select(x => x.req);
-        public IJobQueue JobQueue { get; }
+        public IJobQueue Queue { get; set; }
 
         public bool RegisterFullfilledRequirement(IRequirement requirement)
         {
             string[] tags = requirement.GetRequirementTags();
             lock (_fulfilledRequirements)
             {
-                if(_fulfilledRequirements.Where(x => !tags.ContainsAll(x.tags)).Any())
+                if(!_fulfilledRequirements.Any() || _fulfilledRequirements.Where(x => !tags.ContainsAll(x.tags)).Any())
                 {
                     _fulfilledRequirements.Add((requirement, tags));
                     return true;
@@ -42,10 +44,11 @@ namespace DistributedJobQueue.Client
         {
             AnyRequirement any = new AnyRequirement(FulfilledRequirements);
 
-            (bool, Job.IJob) next = await JobQueue.TryDequeueAsync(any);
+            (bool, Job.IJob) next = await Queue.TryDequeueAsync(any);
             if (next.Item1)
             {
-                await JobQueue.TryEnqueueAllAsync(await next.Item2.Run());
+                IEnumerable<IJob> requeue = await next.Item2.Run();
+                await Queue.TryEnqueueAllAsync(requeue);
             }
             return next.Item1;
         }

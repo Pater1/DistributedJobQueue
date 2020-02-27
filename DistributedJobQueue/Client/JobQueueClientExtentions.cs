@@ -8,36 +8,44 @@ namespace DistributedJobQueue.Client
 {
     public static class JobQueueClientExtentions
     {
-        public static async Task<bool> StartDeamonAsync(this IJobQueueClient client, bool? throwOnErrorExit = null)
+        public static async Task<bool> StartDeamonAsync(this IJobQueueClient client, bool? restartOnException = null, bool? throwOnErrorExit = null)
         {
             bool thro = DeriveThrowOnErrorExit(throwOnErrorExit);
+            bool restrt = DeriveThrowOnErrorExit(restartOnException);
 
             bool cleanExit = true;
             Exception dirtyExitExpection = null;
             SemaphoreSlim awaiter = new SemaphoreSlim(0, 1);
 
-            ThreadPool.QueueUserWorkItem(async (x) =>
+            do
             {
-                try
+                ThreadPool.QueueUserWorkItem(async (x) =>
                 {
-                    bool cont = true;
+                    try
                     {
-                        cont = await client.RunNextAsync();
-                    } while (cont) ;
-                }
-                catch (Exception e)
-                {
-                    dirtyExitExpection = e;
-                    cleanExit = false;
-                }
-                finally
-                {
-                    awaiter.Release();
-                }
-            });
+                        bool cont = true;
+                        do {
+                            cont = await client.RunNextAsync();
+                            if (!cont)
+                            {
+                                await Task.Delay(100);
+                            }
+                        } while (true) ;
+                    }
+                    catch (Exception e)
+                    {
+                        dirtyExitExpection = e;
+                        cleanExit = false;
+                    }
+                    finally
+                    {
+                        awaiter.Release();
+                    }
+                });
 
-            //block this thread until deamon thread exits
-            await awaiter.WaitAsync();
+                //block this thread until deamon thread exits
+                await awaiter.WaitAsync();
+            } while (restrt && !cleanExit);
 
             if(!cleanExit && thro)
             {

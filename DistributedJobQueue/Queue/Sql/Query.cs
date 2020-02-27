@@ -50,11 +50,11 @@ namespace DistributedJobQueue.Queue.Sql
         public IEnumerable<T> EnumerateAsItems<T>() where T : ISelfFactory<T, IDataRecord>, new()
         {
             T factorT = new T();
-            return EnumerateRaw().AsParallel().Select(x => factorT.Build(x));
+            return EnumerateRaw().Select(x => factorT.Build(x));
         }
         public IEnumerable<IDictionary<string, string>> EnumerateAsDictionary()
         {
-            return EnumerateRaw().AsParallel().Select(x =>
+            return EnumerateRaw().Select(x =>
             {
                 Dictionary<string, string> ret = new Dictionary<string, string>();
                 for (int i = 0; i < x.FieldCount; i++)

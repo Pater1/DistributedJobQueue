@@ -22,37 +22,6 @@ namespace DistributedJobQueue.Queue.Sql
             JobJson = jobJson;
         }
 
-        public bool TryDeSqlize(out IJob ret)
-        {
-            string dec = HttpUtility.UrlDecode(JobJson);
-            string tn = JobTypeName;
-            Type t = AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(s => s.GetTypes())
-                .Where(p => !p.IsInterface && typeof(IJob).IsAssignableFrom(p) && p.Name == tn)
-                .FirstOrDefault();
-
-            if(t == null)
-            {
-                ret = null;
-                return false;
-            }
-
-            ret = JsonConvert.DeserializeObject(dec, t) as IJob;
-
-            if (ret == null)
-            {
-                ret = null;
-                return false;
-            }
-            if (ret.JobId != JobId)
-            {
-                ret = null;
-                return false;
-            }
-
-            return true;
-        }
-
         public SqlJob Build(IDataRecord source)
         {
             return new SqlJob(

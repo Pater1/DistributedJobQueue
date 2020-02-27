@@ -35,13 +35,13 @@ namespace DistributedJobQueue.RabbitMq
             Channel.QueueBind(QueueName, ExchangeName, RoutingKey, null);
 
             Consumer = new EventingBasicConsumer(Channel);
-            Consumer.Received += (ch, ea) =>
-            {
-                var body = ea.Body;
-                // ... process the message
-                channel.BasicAck(ea.DeliveryTag, false);
-            };
-            string consumerTag = Channel.BasicConsume(QueueName, false, Channel);
+            //Consumer.Received += (ch, ea) =>
+            //{
+            //    var body = ea.Body;
+            //    // ... process the message
+            //    channel.BasicAck(ea.DeliveryTag, false);
+            //};
+            //string consumerTag = Channel.BasicConsume(QueueName, false, Channel);
         }
 
         public Task<(bool, IJob)> TryDequeueAsync(IRequirement requirementsFulfillable = null)

@@ -1,4 +1,5 @@
 ﻿using DistributedJobQueue.Job;
+using DistributedJobQueue.Job.Wrappers;
 using DistributedJobQueue.Requirements;
 using System;
 using System.Collections.Generic;
@@ -18,6 +19,7 @@ namespace DistributedJobQueue.Queue.Sql
         private Func<DbConnection> ConnectionFactory { get; }
         private string QueueTable { get; } = "JobQueue";
         private string RequirementsTable { get; } = "JobRequirements";
+        private string InProcessTable { get; } = "JobsInProcess";
 
         public async Task<(bool, IJob)> TryDequeueAsync(IRequirement requirementsFulfillable = null)
         {
@@ -27,6 +29,11 @@ namespace DistributedJobQueue.Queue.Sql
                 new Query<DbConnection>(ConnectionFactory, 
                     $"SELECT JobId as JobId, RequirementTag as RequirementTag FROM {RequirementsTable} WHERE RequirementTag IN ({reqTags.Select(x => $"'{x}'").Aggregate((a, b) => $"{a}, {b}")})"
                 ).EnumerateAsItems<SqlRequirement>().Select(x => x.JobId).Distinct().ToArray();
+
+            if (!possibleJobs.Any())
+            {
+                return (false, null);
+            }
 
             Dictionary<Guid, SqlRequirement[]> allJobsReqs =
                 new Query<DbConnection>(ConnectionFactory,
@@ -52,7 +59,7 @@ namespace DistributedJobQueue.Queue.Sql
                 })
                 .Where(x => x.success)
                 .Select(x => (x.jb, x.x))
-                .Where(x => requirementsFulfillable.FullfillsAsync(x.jb.Requirement).Result)//TODO: proper async to avoid deadlock
+                .Where(x => x.jb.Requirement.CheckFulfills(requirementsFulfillable).Result)//TODO: proper async to avoid deadlock
                 .Select(x => (x.jb, x.x, allJobsReqs[x.x.JobId]));
 
             if (!jobs.Any())
@@ -64,21 +71,40 @@ namespace DistributedJobQueue.Queue.Sql
             {
                 try
                 {
-                    new Query<DbConnection>(ConnectionFactory,
+                    string q =
+                        "START TRANSACTION;"
+                        + Environment.NewLine +
                         $"DELETE FROM {QueueTable} WHERE JobId = '{jb.Item1.JobId.ToString()}';"
                         + Environment.NewLine +
                         $"DELETE FROM {RequirementsTable} WHERE JobId = '{jb.Item1.JobId.ToString()}';"
+                        + Environment.NewLine +
+                        $"INSERT INTO {InProcessTable}(JobId, JobType, LastHeartbeat, JobJson) VALUES ('{jb.Item2.JobId.ToString()}', '{jb.Item2.JobTypeName}', NOW(), '{jb.Item2.JobJson}');"
+                        + Environment.NewLine +
+                        "COMMIT;"
+                        ;
+
+                    new Query<DbConnection>(ConnectionFactory,
+                        q
                     ).ExecuteNonQuery();
 
-                    return (true, jb.Item1);
+                    return (true,
+                        new OnCompleteJobWrapper(
+                            new HeartbeatJobWrapper(jb.Item1, TimeSpan.FromSeconds(1), async () =>
+                                new Query<DbConnection>(ConnectionFactory,
+                                    $"UPDATE {InProcessTable} SET LastHeartbeat = NOW() WHERE JobId = '{jb.Item2.JobId.ToString()}';"
+                                ).ExecuteNonQuery()
+                            )
+                        , 
+                            async () => new Query<DbConnection>(ConnectionFactory,
+                                    $"DELETE FROM {InProcessTable} WHERE JobId = '{jb.Item1.JobId.ToString()}';"
+                                ).ExecuteNonQuery()
+                        )
+                    );
                 }
-                catch
+                catch(Exception e)
                 {
                     new Query<DbConnection>(ConnectionFactory,
-                        $"INSERT INTO {QueueTable} (JobId, JobType, JobJson) VALUES ('{jb.Item2.JobId.ToString()}', '{jb.Item2.JobTypeName}', '{jb.Item2.JobJson}');"
-                        + Environment.NewLine +
-                        jb.Item3.Select(x => $"INSERT INTO {RequirementsTable} (JobId, RequirementTag) VALUES ('{x.JobId.ToString()}', '{x.RequirementTag}');")
-                        .Aggregate((a,b) => $"{a}{Environment.NewLine},{b}")
+                        $"ROLLBACK;"
                     ).ExecuteNonQuery();
                 }
             }
@@ -88,13 +114,26 @@ namespace DistributedJobQueue.Queue.Sql
 
         public Task<bool> TryEnqueueAsync(IJob job)
         {
+            if(job.JobId == default)
+            {
+                //TODO: check that guid not used? (may be a non-issue with GUID's 128-bits of randomness)
+                job.JobId = Guid.NewGuid();
+            }
+
             var jb = job.Sqlize();
-            new Query<DbConnection>(ConnectionFactory,
-                        $"INSERT INTO {QueueTable} (JobId, JobType, JobJson) VALUES ('{jb.Item1.JobId.ToString()}', '{jb.Item1.JobTypeName}', '{jb.Item1.JobJson}');"
+
+            if (!jb.Item2.Any())
+            {
+                //TODO: log that job had no requirements
+                return Task.FromResult(false);
+            }
+
+            string query = $"INSERT INTO {QueueTable} (JobId, JobType, JobJson) VALUES ('{jb.Item1.JobId.ToString()}', '{jb.Item1.JobTypeName}', '{jb.Item1.JobJson}');"
                         + Environment.NewLine +
                         jb.Item2.Select(x => $"INSERT INTO {RequirementsTable} (JobId, RequirementTag) VALUES ('{x.JobId.ToString()}', '{x.RequirementTag}');")
-                        .Aggregate((a, b) => $"{a}{Environment.NewLine},{b}")
-                    ).ExecuteNonQuery();
+                                .Aggregate((a, b) => $"{a}{Environment.NewLine}{b}");
+
+            new Query<DbConnection>(ConnectionFactory, query).ExecuteNonQuery();
             return Task.FromResult(true);
         }
     }

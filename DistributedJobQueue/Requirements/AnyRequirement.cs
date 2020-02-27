@@ -8,33 +8,32 @@ using System.Threading.Tasks;
 namespace DistributedJobQueue.Requirements
 {
     [System.Serializable]
-    public readonly struct AnyRequirement : IRequirement, IEnumerable<IRequirement>
+    public class AnyRequirement : IEnumerableRequirement
     {
-        private IEnumerable<IRequirement> SubRequirements { get; }
+        public List<IRequirement> SubRequirements { get; }
+
+        IEnumerable<IRequirement> IEnumerableRequirement.SubRequirements => SubRequirements;
+
+        public AnyRequirement()
+        {
+            SubRequirements = new List<IRequirement>();
+        }
+        public AnyRequirement(params IRequirement[] subRequirements)
+        {
+            SubRequirements = subRequirements.ToList();
+        }
         public AnyRequirement(IEnumerable<IRequirement> subRequirements)
         {
-            SubRequirements = subRequirements;
+            SubRequirements = subRequirements.ToList();
         }
-        public async Task<bool> FullfillsAsync(IRequirement toComp)
+        public Task<bool> FullfillsAsync(IRequirement toComp)
         {
-            foreach(IRequirement requirement in SubRequirements)
-            {
-                if(await requirement.FullfillsAsync(toComp))
-                {
-                    return true;
-                }
-            }
-            return false;
+            return this.CheckFulfills(toComp);
         }
 
-        public IEnumerator<IRequirement> GetEnumerator()
+        public bool Aggregate(bool a, bool b)
         {
-            return SubRequirements.GetEnumerator();
-        }
-
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            return SubRequirements.GetEnumerator();
+            return a || b;
         }
     }
 }

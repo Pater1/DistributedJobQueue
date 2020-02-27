@@ -17,7 +17,7 @@ namespace DistributedJobQueue.Job
         {
             JobId = new Guid();
             ReturnJobId = jobId;
-            Requirement = requirement;
+            Requirement = requirement == null? new NoRequirement(): requirement;
             ReturnValue = returnValue;
         }
 
