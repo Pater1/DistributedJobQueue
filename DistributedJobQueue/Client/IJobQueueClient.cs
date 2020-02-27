@@ -1,4 +1,5 @@
-﻿using DistributedJobQueue.Queue;
+﻿using DistributedJobQueue.Fulfillments;
+using DistributedJobQueue.Queue;
 using DistributedJobQueue.Requirements;
 using System;
 using System.Collections.Generic;
@@ -9,9 +10,11 @@ namespace DistributedJobQueue.Client
 {
     public interface IJobQueueClient
     {
-        IEnumerable<IRequirement> FulfilledRequirements { get; }
         IJobQueue Queue { get; set; }
-        bool RegisterFullfilledRequirement(IRequirement requirement);
+        //IEnumerable<IRequirement> Requirements { get; }
+        //bool RegisterRequirement(IRequirement requirement);
+        IEnumerable<IFulfillment> Fulfillments { get; }
+        bool RegisterFulfillment(IFulfillment requirement);
         Task<bool> RunNextAsync();
     }
 }

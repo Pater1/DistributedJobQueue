@@ -1,4 +1,5 @@
-﻿using System;
+﻿using DistributedJobQueue.Fulfillments;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
@@ -25,6 +26,6 @@ namespace DistributedJobQueue.Requirements
             BackingRequirement = requirement;
         }
 
-        public Task<bool> FullfillsAsync(IRequirement toComp) => BackingRequirement.FullfillsAsync(toComp);
+        public Task<bool> FulfilledByAsync(IEnumerable<IFulfillment> fulfillment) => BackingRequirement.FulfilledByAsync(fulfillment);
     }
 }

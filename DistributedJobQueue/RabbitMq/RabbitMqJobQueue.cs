@@ -9,6 +9,7 @@ using Newtonsoft.Json;
 using System.Linq;
 using RabbitMQ.Client.Events;
 using DistributedJobQueue.Queue;
+using DistributedJobQueue.Fulfillments;
 
 namespace DistributedJobQueue.RabbitMq
 {
@@ -44,11 +45,6 @@ namespace DistributedJobQueue.RabbitMq
             //string consumerTag = Channel.BasicConsume(QueueName, false, Channel);
         }
 
-        public Task<(bool, IJob)> TryDequeueAsync(IRequirement requirementsFulfillable = null)
-        {
-            throw new NotImplementedException();
-        }
-
         JsonSerializerSettings JsonSerializerSettings { get; } = new JsonSerializerSettings()
         {
 
@@ -81,6 +77,11 @@ namespace DistributedJobQueue.RabbitMq
         {
             Channel.Close();
             Connection.Close();
+        }
+
+        public Task<(bool, IJob)> TryDequeueAsync(IEnumerable<IFulfillment> requirementsFulfillable = null)
+        {
+            throw new NotImplementedException();
         }
     }
 }

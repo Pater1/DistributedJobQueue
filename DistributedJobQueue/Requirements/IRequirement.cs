@@ -1,4 +1,5 @@
-﻿using System;
+﻿using DistributedJobQueue.Fulfillments;
+using System;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Text;
@@ -8,6 +9,6 @@ namespace DistributedJobQueue.Requirements
 {
     public interface IRequirement
     {
-        Task<bool> FullfillsAsync(IRequirement toComp);
+        Task<bool> FulfilledByAsync(IEnumerable<IFulfillment> fulfillment);
     }
 }

@@ -1,4 +1,5 @@
 ﻿using Dasync.Collections;
+using DistributedJobQueue.Fulfillments;
 using DistributedJobQueue.Job;
 using DistributedJobQueue.Requirements;
 using System;
@@ -15,19 +16,17 @@ namespace DistributedJobQueue.Queue
         private List<(string[] reqTags, IJob job)> sudoQueue = new List<(string[] reqTags, IJob job)>();
         private SemaphoreSlim locker = new SemaphoreSlim(1, 1);
         private List<Guid> InProcess = new List<Guid>();
-        public async Task<(bool, IJob)> TryDequeueAsync(IRequirement requirementsFulfillable = null)
+        public async Task<(bool, IJob)> TryDequeueAsync(IEnumerable<IFulfillment> fulfillments = null)
         {
-            if (requirementsFulfillable == null) requirementsFulfillable = new NoRequirement();
-
-            string[] reqTags = requirementsFulfillable.GetRequirementTags();
+            string[] fulTags = fulfillments.GetFulfillmentTags();
             IJob job = null;
             int index = -1;
 
             await locker.WaitAsync();
 
-            foreach ((IJob jb, int i) jbi in sudoQueue.Select((x,i) => (x,i)).Where(x => x.Item1.reqTags.ContainsAll(reqTags)).Select(x => (x.Item1.job, x.Item2)))
+            foreach ((IJob jb, int i) jbi in sudoQueue.Select((x,i) => (x,i)).Where(x => x.Item1.reqTags.ContainsAll(fulTags)).Select(x => (x.Item1.job, x.Item2)))
             {
-                if (await (jbi.jb.Requirement ?? new NoRequirement()).FullfillsAsync(requirementsFulfillable))
+                if (await (jbi.jb.Requirement ?? new NoRequirement()).FulfilledByAsync(fulfillments))
                 {
                     job = jbi.jb;
                     index = jbi.i;

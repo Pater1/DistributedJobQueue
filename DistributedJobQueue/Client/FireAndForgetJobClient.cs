@@ -1,4 +1,5 @@
-﻿using DistributedJobQueue.Job;
+﻿using DistributedJobQueue.Fulfillments;
+using DistributedJobQueue.Job;
 using DistributedJobQueue.Queue;
 using DistributedJobQueue.Requirements;
 using System;
@@ -12,41 +13,39 @@ namespace DistributedJobQueue.Client
 {
     public class FireAndForgetJobClient : IJobQueueClient
     {
-        public List<(IRequirement req, string[] tags)> _fulfilledRequirements = new List<(IRequirement req, string[] tags)>();
+        public List<(IFulfillment req, string[] tags)> _fulfillments = new List<(IFulfillment req, string[] tags)>();
 
         public FireAndForgetJobClient() { }
-        public FireAndForgetJobClient(IJobQueue jobQueue, IEnumerable<IRequirement> fulfilledRequirements = null)
+        public FireAndForgetJobClient(IJobQueue jobQueue, IEnumerable<IFulfillment> fulfillments = null)
         {
-            if (fulfilledRequirements != null)
+            if (fulfillments != null)
             {
-                _fulfilledRequirements = fulfilledRequirements.Select(x => (x, x.GetRequirementTags())).ToList();
+                _fulfillments = fulfillments.Select(x => (x, x.GetFulfillmentTags())).ToList();
             }
             Queue = jobQueue;
         }
-
-        public IEnumerable<IRequirement> FulfilledRequirements => _fulfilledRequirements.Select(x => x.req);
-        public IJobQueue Queue { get; set; }
-
-        public bool RegisterFullfilledRequirement(IRequirement requirement)
+        public bool RegisterFulfillment(IFulfillment fulfillment)
         {
-            string[] tags = requirement.GetRequirementTags();
-            lock (_fulfilledRequirements)
+            string[] tags = fulfillment.GetFulfillmentTags();
+            lock (_fulfillments)
             {
-                if (!_fulfilledRequirements.Any() || _fulfilledRequirements.Where(x => !tags.ContainsAll(x.tags)).Any())
+                if (!_fulfillments.Any() || _fulfillments.Where(x => !tags.ContainsAll(x.tags)).Any())
                 {
-                    _fulfilledRequirements.Add((requirement, tags));
+                    _fulfillments.Add((fulfillment, tags));
                     return true;
                 }
             }
             return false;
         }
 
+        public IEnumerable<IFulfillment> Fulfillments => _fulfillments.Select(x => x.req);
+        public IJobQueue Queue { get; set; }
+
+
         public int ActiveJobs { get; private set; } = 0;
         public async Task<bool> RunNextAsync()
         {
-            AnyRequirement any = new AnyRequirement(FulfilledRequirements);
-
-            (bool, Job.IJob) next = await Queue.TryDequeueAsync(any);
+            (bool, Job.IJob) next = await Queue.TryDequeueAsync(Fulfillments);
             if (next.Item1)
             {
                 ThreadPool.QueueUserWorkItem(async _ =>

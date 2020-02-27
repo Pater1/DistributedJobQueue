@@ -1,4 +1,5 @@
-﻿using System;
+﻿using DistributedJobQueue.Fulfillments;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,9 +11,7 @@ namespace DistributedJobQueue.Requirements
     [System.Serializable]
     public class AllRequirement: IEnumerableRequirement
     {
-        public List<IRequirement> SubRequirements { get; }
-
-        IEnumerable<IRequirement> IEnumerableRequirement.SubRequirements => SubRequirements;
+        public IEnumerable<IRequirement> SubRequirements { get; }
 
         public AllRequirement()
         {
@@ -26,14 +25,9 @@ namespace DistributedJobQueue.Requirements
         {
             SubRequirements = subRequirements.ToList();
         }
-        public Task<bool> FullfillsAsync(IRequirement toComp)
+        public async Task<bool> FulfilledByAsync(IEnumerable<IFulfillment> fulfillment)
         {
-            return this.CheckFulfills(toComp);
-        }
-
-        public bool Aggregate(bool a, bool b)
-        {
-            return a && b;
+            return (await Task.WhenAll(SubRequirements.Select(x => x.FulfilledByAsync(fulfillment)))).Aggregate((a,b) => a && b);
         }
     }
 }

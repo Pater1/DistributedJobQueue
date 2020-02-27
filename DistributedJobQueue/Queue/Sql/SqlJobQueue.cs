@@ -1,4 +1,6 @@
-﻿using DistributedJobQueue.Job;
+﻿using DistributedJobQueue.Client;
+using DistributedJobQueue.Fulfillments;
+using DistributedJobQueue.Job;
 using DistributedJobQueue.Job.Wrappers;
 using DistributedJobQueue.Requirements;
 using System;
@@ -23,9 +25,9 @@ namespace DistributedJobQueue.Queue.Sql
         private string UnfinishedJobs { get; } = "UnfinishedJobs";
         private List<Guid> InProcessLocal { get; } = new List<Guid>();
 
-        public async Task<(bool, IJob)> TryDequeueAsync(IRequirement requirementsFulfillable = null)
+        public async Task<(bool, IJob)> TryDequeueAsync(IEnumerable<IFulfillment> fulfillments = null)
         {
-            string[] reqTags = requirementsFulfillable.GetRequirementTags().Select(x => x.ToLower()).ToArray();
+            string[] reqTags = fulfillments.GetFulfillmentTags().Select(x => x.ToLower()).ToArray();
 
             Guid[] possibleJobs = 
                 new Query<DbConnection>(ConnectionFactory, 
@@ -51,17 +53,21 @@ namespace DistributedJobQueue.Queue.Sql
             }
 
             IEnumerable<(IJob, SqlJob, SqlRequirement[])> jobs =
-                new Query<DbConnection>(ConnectionFactory,
-                    $"SELECT JobId as JobId, JobType as JobType, JobJson as JobJson FROM {QueueTable} WHERE JobId IN ({allJobsReqs.Select(x => $"'{x.Key.ToString()}'").Distinct().Aggregate((a, b) => $"{a}, {b}")})"
-                ).EnumerateAsItems<SqlJob>()
-                .Select(x =>
-                {
-                    bool success = x.TryDeSqlize(out IJob jb);
-                    return (success, jb, x);
-                })
-                .Where(x => x.success)
-                .Select(x => (x.jb, x.x))
-                .Where(x => x.jb.Requirement.CheckFulfills(requirementsFulfillable).Result)//TODO: proper async to avoid deadlock
+                (await Task.WhenAll(
+                    new Query<DbConnection>(ConnectionFactory,
+                        $"SELECT JobId as JobId, JobType as JobType, JobJson as JobJson FROM {QueueTable} WHERE JobId IN ({allJobsReqs.Select(x => $"'{x.Key.ToString()}'").Distinct().Aggregate((a, b) => $"{a}, {b}")})"
+                    ).EnumerateAsItems<SqlJob>()
+                    .Select(x =>
+                    {
+                        bool success = x.TryDeSqlize(out IJob jb);
+                        return (success, jb, x);
+                    })
+                    .Where(x => x.success)
+                    .Select(async x => 
+                        (x.jb, x.x, await x.jb.Requirement.FulfilledByAsync(fulfillments))
+                    )
+                ))
+                .Where(x => x.Item3)                      
                 .Select(x => (x.jb, x.x, allJobsReqs[x.x.JobId]));
 
             if (!jobs.Any())
@@ -90,6 +96,7 @@ namespace DistributedJobQueue.Queue.Sql
                     ).ExecuteNonQuery();
 
                     InProcessLocal.Add(jb.Item1.JobId);
+                    this.RegisterJobDispatch(jb.Item1);
 
                     return (true,
                         new OnCompleteJobWrapper(
@@ -102,6 +109,7 @@ namespace DistributedJobQueue.Queue.Sql
                             async () =>
                             {
                                 InProcessLocal.Remove(jb.Item1.JobId);
+                                this.UnregisterJobDispatch(jb.Item1);
                                 new Query<DbConnection>(ConnectionFactory,
                                     $"DELETE FROM {InProcessTable} WHERE JobId = '{jb.Item1.JobId.ToString()}';"
                                 ).ExecuteNonQuery();
@@ -154,7 +162,7 @@ namespace DistributedJobQueue.Queue.Sql
                 $"SELECT COUNT(*) FROM {UnfinishedJobs} WHERE JobId = '{jobId.ToString()}';"
             );//.ExecuteScalar();
 
-            while (InProcessLocal.Contains(jobId) || q.ExecuteScalar<int>() > 0)
+            while (InProcessLocal.Contains(jobId) || (int.TryParse(q.ExecuteScalar().ToString(), out int cnt) && cnt > 0))
             {
                 await Task.Delay(10);
             }

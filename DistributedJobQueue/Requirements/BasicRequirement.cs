@@ -1,4 +1,5 @@
-﻿using System;
+﻿using DistributedJobQueue.Fulfillments;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
@@ -16,22 +17,47 @@ namespace DistributedJobQueue.Requirements
             IgnoreCase = ignoreCase;
         }
 
-        public Task<bool> FullfillsAsync(IRequirement toComp)
+        public Task<bool> FulfilledByAsync(IEnumerable<IFulfillment> fulfillment)
         {
             bool ret = false;
-            if(toComp is BasicRequirement)
+            foreach (IFulfillment ful in fulfillment)
             {
-                BasicRequirement basComp = (BasicRequirement)toComp;
-                if(IgnoreCase || basComp.IgnoreCase)
+                if (ful is BasicFulfillment)
                 {
-                    ret = RequirementName.ToLowerInvariant() == basComp.RequirementName.ToLowerInvariant();
+                    BasicFulfillment basComp = (BasicFulfillment)ful;
+                    if (IgnoreCase || basComp.IgnoreCase)
+                    {
+                        ret = RequirementName.ToLowerInvariant() == basComp.FulfillmentName.ToLowerInvariant();
+                    }
+                    else
+                    {
+                        ret = RequirementName == basComp.FulfillmentName;
+                    }
                 }
-                else
+                if (ret)
                 {
-                    ret = RequirementName == basComp.RequirementName;
+                    break;
                 }
             }
             return Task.FromResult(ret);
         }
+
+        //public Task<bool> FullfillsAsync(IRequirement toComp)
+        //{
+        //    bool ret = false;
+        //    if(toComp is BasicRequirement)
+        //    {
+        //        BasicRequirement basComp = (BasicRequirement)toComp;
+        //        if(IgnoreCase || basComp.IgnoreCase)
+        //        {
+        //            ret = RequirementName.ToLowerInvariant() == basComp.RequirementName.ToLowerInvariant();
+        //        }
+        //        else
+        //        {
+        //            ret = RequirementName == basComp.RequirementName;
+        //        }
+        //    }
+        //    return Task.FromResult(ret);
+        //}
     }
 }

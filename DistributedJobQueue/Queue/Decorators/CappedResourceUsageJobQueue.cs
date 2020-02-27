@@ -8,6 +8,7 @@ using System.Text;
 using System.Collections;
 using System.Collections.Specialized;
 using System.Threading.Tasks;
+using DistributedJobQueue.Fulfillments;
 
 namespace DistributedJobQueue.Queue.Decorators
 {
@@ -68,7 +69,7 @@ namespace DistributedJobQueue.Queue.Decorators
             return ret;
         }
 
-        public async Task<(bool, IJob)> TryDequeueAsync(IRequirement requirementsFulfillable = null)
+        public async Task<(bool, IJob)> TryDequeueAsync(IEnumerable<IFulfillment> requirementsFulfillable = null)
         {
             //Proc.MachineName
             while(!RecourceLimits.Select(x => GetResourceUsage(x.resource) < x.limit).Aggregate((a,b) => a && b))

@@ -31,10 +31,10 @@ namespace DistributedJobQueue.Queue.Sql
                 }
             }
         }
-        public T ExecuteScalar<T>()
-        {
-            return (T)ExecuteScalar();
-        }
+        //public T ExecuteScalar<T>()
+        //{
+        //    return (T)ExecuteScalar();
+        //}
         public object ExecuteScalar()
         {
             using (Conn connection = ConnectionFactory())
