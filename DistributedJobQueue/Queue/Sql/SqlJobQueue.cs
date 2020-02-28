@@ -3,6 +3,7 @@ using DistributedJobQueue.Fulfillments;
 using DistributedJobQueue.Job;
 using DistributedJobQueue.Job.Wrappers;
 using DistributedJobQueue.Requirements;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Data.Common;
@@ -21,7 +22,7 @@ namespace DistributedJobQueue.Queue.Sql
         private Func<DbConnection> ConnectionFactory { get; }
         private string QueueTable { get; } = "JobQueue";
         private string RequirementsTable { get; } = "JobRequirements";
-        private string InProcessTable { get; } = "JobsInProcess";
+        //private string InProcessTable { get; } = "JobsInProcess";
         private string UnfinishedJobs { get; } = "UnfinishedJobs";
         private List<Guid> InProcessLocal { get; } = new List<Guid>();
 
@@ -31,7 +32,7 @@ namespace DistributedJobQueue.Queue.Sql
 
             Guid[] possibleJobs = 
                 new Query<DbConnection>(ConnectionFactory, 
-                    $"SELECT JobId as JobId, RequirementTag as RequirementTag FROM {RequirementsTable} WHERE RequirementTag IN ({reqTags.Select(x => $"'{x}'").Aggregate((a, b) => $"{a}, {b}")})"
+                    $"SELECT * FROM {RequirementsTable} WHERE RequirementTag IN ({reqTags.Select(x => $"'{x}'").Aggregate((a, b) => $"{a}, {b}")})"
                 ).EnumerateAsItems<SqlRequirement>().Select(x => x.JobId).Distinct().ToArray();
 
             if (!possibleJobs.Any())
@@ -41,7 +42,7 @@ namespace DistributedJobQueue.Queue.Sql
 
             Dictionary<Guid, SqlRequirement[]> allJobsReqs =
                 new Query<DbConnection>(ConnectionFactory,
-                    $"SELECT JobId as JobId, RequirementTag as RequirementTag FROM {RequirementsTable} WHERE JobId IN ({possibleJobs.Select(x => $"'{x.ToString()}'").Aggregate((a, b) => $"{a}, {b}")})"
+                    $"SELECT * FROM {RequirementsTable} WHERE JobId IN ({possibleJobs.Select(x => $"'{x.ToString()}'").Aggregate((a, b) => $"{a}, {b}")})"
                 ).EnumerateAsItems<SqlRequirement>()
                 .GroupBy(x => x.JobId)
                 .Where(x => x.Select(y => y.RequirementTag.ToLower()).Except(reqTags).Count() <= 0)
@@ -55,7 +56,7 @@ namespace DistributedJobQueue.Queue.Sql
             IEnumerable<(IJob, SqlJob, SqlRequirement[])> jobs =
                 (await Task.WhenAll(
                     new Query<DbConnection>(ConnectionFactory,
-                        $"SELECT JobId as JobId, JobType as JobType, JobJson as JobJson FROM {QueueTable} WHERE JobId IN ({allJobsReqs.Select(x => $"'{x.Key.ToString()}'").Distinct().Aggregate((a, b) => $"{a}, {b}")})"
+                        $"SELECT * FROM AvaliableJobs WHERE JobId IN ({allJobsReqs.Select(x => $"'{x.Key.ToString()}'").Distinct().Aggregate((a, b) => $"{a}, {b}")})"
                     ).EnumerateAsItems<SqlJob>()
                     .Select(x =>
                     {
@@ -82,11 +83,9 @@ namespace DistributedJobQueue.Queue.Sql
                     string q =
                         "START TRANSACTION;"
                         + Environment.NewLine +
-                        $"DELETE FROM {QueueTable} WHERE JobId = '{jb.Item1.JobId.ToString()}';"
+                        $"UPDATE {QueueTable} SET TimeStarted = NOW() WHERE JobId = '{jb.Item2.JobId.ToString()}';"
                         + Environment.NewLine +
-                        $"DELETE FROM {RequirementsTable} WHERE JobId = '{jb.Item1.JobId.ToString()}';"
-                        + Environment.NewLine +
-                        $"INSERT INTO {InProcessTable}(JobId, JobType, LastHeartbeat, JobJson) VALUES ('{jb.Item2.JobId.ToString()}', '{jb.Item2.JobTypeName}', NOW(), '{jb.Item2.JobJson}');"
+                        $"UPDATE {QueueTable} SET Status = '{JobStatus.InProcess.Json()}' WHERE JobId = '{jb.Item2.JobId.ToString()}';"
                         + Environment.NewLine +
                         "COMMIT;"
                         ;
@@ -99,22 +98,54 @@ namespace DistributedJobQueue.Queue.Sql
                     this.RegisterJobDispatch(jb.Item1);
 
                     return (true,
-                        new OnCompleteJobWrapper(
-                            new HeartbeatJobWrapper(jb.Item1, TimeSpan.FromSeconds(1), async () =>
-                                new Query<DbConnection>(ConnectionFactory,
-                                    $"UPDATE {InProcessTable} SET LastHeartbeat = NOW() WHERE JobId = '{jb.Item2.JobId.ToString()}';"
-                                ).ExecuteNonQuery()
+                        //TODO: factory pattern this to make more readable
+                        new OnErrorJobWrapper(
+                            new OnCompleteJobWrapper(
+                                new HeartbeatJobWrapper(
+                                    jb.Item1
+                                , 
+                                    TimeSpan.FromSeconds(1)
+                                ,
+                                    async () =>
+                                        new Query<DbConnection>(ConnectionFactory,
+                                            $"UPDATE {QueueTable} SET LastHeartbeat = NOW() WHERE JobId = '{jb.Item2.JobId.ToString()}';"
+                                        ).ExecuteNonQuery()
+                                )
+                            , 
+                                async () =>
+                                {
+                                    InProcessLocal.Remove(jb.Item1.JobId);
+                                    this.UnregisterJobDispatch(jb.Item1);
+                                    new Query<DbConnection>(ConnectionFactory,
+                                        "START TRANSACTION;"
+                                        + Environment.NewLine +
+                                        $"UPDATE {QueueTable} SET TimeFinished = NOW() WHERE JobId = '{jb.Item2.JobId.ToString()}';"
+                                        + Environment.NewLine +
+                                        $"UPDATE {QueueTable} SET Status = '{JobStatus.Done.Json()}' WHERE JobId = '{jb.Item2.JobId.ToString()}';"
+                                        + Environment.NewLine +
+                                        "COMMIT;"
+                                    ).ExecuteNonQuery();
+                                }
                             )
-                        , 
-                            async () =>
+                        ,
+                            async (e) =>
                             {
                                 InProcessLocal.Remove(jb.Item1.JobId);
                                 this.UnregisterJobDispatch(jb.Item1);
                                 new Query<DbConnection>(ConnectionFactory,
-                                    $"DELETE FROM {InProcessTable} WHERE JobId = '{jb.Item1.JobId.ToString()}';"
+                                    "START TRANSACTION;"
+                                    + Environment.NewLine +
+                                    $"UPDATE {QueueTable} SET TimeFinished = NOW() WHERE JobId = '{jb.Item2.JobId.ToString()}';"
+                                    + Environment.NewLine +
+                                    $"UPDATE {QueueTable} SET Status = '{(JobStatus.Done | JobStatus.Error | JobStatus.WithReturnValue).Json()}' WHERE JobId = '{jb.Item2.JobId.ToString()}';"
+                                    + Environment.NewLine +
+                                    $"UPDATE {QueueTable} SET ReturnJson = '{JsonConvert.SerializeObject(e)}' WHERE JobId = '{jb.Item2.JobId.ToString()}';"
+                                    + Environment.NewLine +
+                                    $"UPDATE {QueueTable} SET ReturnType = '{e.GetType().Name}' WHERE JobId = '{jb.Item2.JobId.ToString()}';"
+                                    + Environment.NewLine +
+                                    "COMMIT;"
                                 ).ExecuteNonQuery();
                             }
-
                         )
                     );
                 }
@@ -131,6 +162,17 @@ namespace DistributedJobQueue.Queue.Sql
 
         public Task<bool> TryEnqueueAsync(IJob job)
         {
+            if(job is IDeterministicIdJob)
+            {
+                try
+                {
+                    job.JobId = (job as IDeterministicIdJob).GenerateJobId();
+                }
+                catch
+                {
+                    job.JobId = (job as IDeterministicIdJob).GenerateIdFromJsonHash();
+                }
+            }
             if(job.JobId == default)
             {
                 //TODO: check that guid not used? (may be a non-issue with GUID's 128-bits of randomness)
@@ -138,6 +180,7 @@ namespace DistributedJobQueue.Queue.Sql
             }
 
             var jb = job.Sqlize();
+            jb.Item1.TimeEnqueued = DateTime.UtcNow;
 
             if (!jb.Item2.Any())
             {
@@ -145,10 +188,16 @@ namespace DistributedJobQueue.Queue.Sql
                 return Task.FromResult(false);
             }
 
-            string query = $"INSERT INTO {QueueTable} (JobId, JobType, JobJson) VALUES ('{jb.Item1.JobId.ToString()}', '{jb.Item1.JobTypeName}', '{jb.Item1.JobJson}');"
+            string query =
+                        "START TRANSACTION;"
+                        + Environment.NewLine +
+                        $"INSERT INTO {QueueTable} (JobId, JobType, JobJson, TimeEnqueued, Status) VALUES ('{jb.Item1.JobId.ToString()}', '{jb.Item1.JobTypeName}', '{jb.Item1.JobJson}', NOW(), '{JobStatus.Enqueued.Json()}');"
                         + Environment.NewLine +
                         jb.Item2.Select(x => $"INSERT INTO {RequirementsTable} (JobId, RequirementTag) VALUES ('{x.JobId.ToString()}', '{x.RequirementTag}');")
-                                .Aggregate((a, b) => $"{a}{Environment.NewLine}{b}");
+                                .Aggregate((a, b) => $"{a}{Environment.NewLine}{b}")
+                        + Environment.NewLine +
+                        "COMMIT;"
+                        ;
 
             new Query<DbConnection>(ConnectionFactory, query).ExecuteNonQuery();
             return Task.FromResult(true);
