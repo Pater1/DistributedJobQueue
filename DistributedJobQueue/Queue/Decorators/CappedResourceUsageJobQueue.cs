@@ -60,7 +60,8 @@ namespace DistributedJobQueue.Queue.Decorators
                     break;
                 case Resource.RAM:
                     //ret = GC.GetTotalMemory(false);
-                    ret = Proc.PrivateMemorySize64;
+                    //ret = Proc.PrivateMemorySize64;
+                    ret = GC.GetGCMemoryInfo().MemoryLoadBytes;
                     break;
                 default:
                     ret = decimal.MaxValue;
@@ -86,9 +87,9 @@ namespace DistributedJobQueue.Queue.Decorators
             return BaseQueue.TryEnqueueAsync(job);
         }
 
-        public Task<bool> WaitForCompletionAsync(Guid jobId)
+        public Task<(bool, object)> WaitForReturnValueAsync(Guid awaitingJobId, Guid jobToAwaitId)
         {
-            return BaseQueue.WaitForCompletionAsync(jobId);
+            return BaseQueue.WaitForReturnValueAsync(awaitingJobId, jobToAwaitId);
         }
     }
 }

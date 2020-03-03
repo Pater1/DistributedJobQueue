@@ -10,6 +10,7 @@ using System.Data.Common;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Web;
 
 namespace DistributedJobQueue.Queue.Sql
 {
@@ -123,6 +124,14 @@ namespace DistributedJobQueue.Queue.Sql
                                         + Environment.NewLine +
                                         $"UPDATE {QueueTable} SET Status = '{JobStatus.Done.Json()}' WHERE JobId = '{jb.Item2.JobId.ToString()}';"
                                         + Environment.NewLine +
+                                        $"DELETE JobQueue, JobRequirements " +
+                                        //$"FROM JobsInWaiting " +
+                                        $"FROM JobQueue " +
+                                        $"INNER JOIN JobRequirements ON JobQueue.JobId = JobRequirements.JobId " +
+                                        $"WHERE JobQueue.JobId = '{jb.Item1.JobId.ToString()}' " +
+                                        $"AND (SELECT COUNT(*) FROM JobsInWaiting WHERE JobsInWaiting.JobWaitedOnId = JobQueue.JobId OR JobsInWaiting.WaitingJobId = JobQueue.JobId) = 0" +
+                                        ';'
+                                        + Environment.NewLine +
                                         "COMMIT;"
                                     ).ExecuteNonQuery();
                                 }
@@ -139,7 +148,8 @@ namespace DistributedJobQueue.Queue.Sql
                                     + Environment.NewLine +
                                     $"UPDATE {QueueTable} SET Status = '{(JobStatus.Done | JobStatus.Error | JobStatus.WithReturnValue).Json()}' WHERE JobId = '{jb.Item2.JobId.ToString()}';"
                                     + Environment.NewLine +
-                                    $"UPDATE {QueueTable} SET ReturnJson = '{JsonConvert.SerializeObject(e)}' WHERE JobId = '{jb.Item2.JobId.ToString()}';"
+                                    //TODO: Wrap exceptions in Json-friendly format
+                                    $"UPDATE {QueueTable} SET ReturnJson = '{/*HttpUtility.UrlEncode(JsonConvert.SerializeObject(e))*/'f'}' WHERE JobId = '{jb.Item2.JobId.ToString()}';"
                                     + Environment.NewLine +
                                     $"UPDATE {QueueTable} SET ReturnType = '{e.GetType().Name}' WHERE JobId = '{jb.Item2.JobId.ToString()}';"
                                     + Environment.NewLine +
@@ -203,20 +213,67 @@ namespace DistributedJobQueue.Queue.Sql
             return Task.FromResult(true);
         }
 
-        public async Task<bool> WaitForCompletionAsync(Guid jobId)
+        public async Task<(bool, object)> WaitForReturnValueAsync(Guid awaitingJobId, Guid jobToAwaitId)
         {
-            //TODO: detect if job asks to wait on itself & error
+            if(awaitingJobId == jobToAwaitId)
+            {
+                throw new ArgumentException($"A job cannot await itself. jobId: {awaitingJobId.ToString()}");
+            }
+
+            new Query<DbConnection>(ConnectionFactory,
+                $"INSERT INTO JobsInWaiting(WaitingJobId, JobWaitedOnId) VALUES ('{awaitingJobId.ToString()}', '{jobToAwaitId.ToString()}');"
+            ).ExecuteNonQuery();
 
             Query<DbConnection> q = new Query<DbConnection>(ConnectionFactory,
-                $"SELECT COUNT(*) FROM {UnfinishedJobs} WHERE JobId = '{jobId.ToString()}';"
-            );//.ExecuteScalar();
-
-            while (InProcessLocal.Contains(jobId) || (int.TryParse(q.ExecuteScalar().ToString(), out int cnt) && cnt > 0))
+                $"SELECT COUNT(*) FROM {UnfinishedJobs} WHERE JobId = '{jobToAwaitId.ToString()}';"
+            );
+            while (InProcessLocal.Contains(jobToAwaitId) || (long.TryParse(q.ExecuteScalar().ToString(), out long cnt) && cnt > 0))
             {
                 await Task.Delay(10);
             }
+           
+            IDictionary<string, string> val = new Query<DbConnection>(ConnectionFactory,
+                $"SELECT ReturnJson, ReturnType FROM JobQueue WHERE JobId = '{jobToAwaitId.ToString()}';"
+            ).EnumerateAsDictionary().SingleOrDefault();
 
-            return true;
+            new Query<DbConnection>(ConnectionFactory,
+                $"DELETE FROM JobsInWaiting WHERE WaitingJobId = '{awaitingJobId.ToString()}' AND JobWaitedOnId = '{jobToAwaitId.ToString()}';"
+            ).ExecuteNonQuery();
+            //new Query<DbConnection>(ConnectionFactory,
+            //    $"DELETE FROM JobQueue WHERE (SELECT COUNT(*) FROM JobsInWaiting WHERE WaitingJobId = JobQueue.JobId) = 0 AND (SELECT COUNT(*) FROM JobsInWaiting WHERE JobWaitedOnId = JobQueue.JobId) = 0 AND json_contains(Status, cast('\"done\"' as json), '$');"
+            //).ExecuteNonQuery();
+            //new Query<DbConnection>(ConnectionFactory,
+            //    $"DELETE FROM JobRequirements WHERE (SELECT COUNT(*) FROM JobQueue WHERE JobQueue.JobId = JobRequirements.JobId) = 0;"
+            //).ExecuteNonQuery();
+
+            new Query<DbConnection>(ConnectionFactory,
+                $"DELETE JobQueue, JobRequirements " +
+                //$"FROM JobsInWaiting " +
+                $"FROM JobQueue " +
+                $"INNER JOIN JobRequirements ON JobQueue.JobId = JobRequirements.JobId " +
+                $"WHERE (JobQueue.JobId = '{awaitingJobId.ToString()}' OR JobQueue.JobId = '{jobToAwaitId.ToString()}') " +
+                $"AND json_contains(JobQueue.Status, cast('\"done\"' as json), '$') " +
+                $"AND (SELECT COUNT(*) FROM JobsInWaiting WHERE JobsInWaiting.JobWaitedOnId = JobQueue.JobId OR JobsInWaiting.WaitingJobId = JobQueue.JobId) = 0" +
+                ';'
+            ).ExecuteNonQuery();
+
+            if (val == null || string.IsNullOrWhiteSpace(val["ReturnJson"]))
+            {
+                return (true, null);
+            }
+
+            Type t = AppDomain.CurrentDomain.GetAssemblies()
+                .SelectMany(s => s.GetTypes())
+                .Where(p => p.Name == val["ReturnType"])
+                .FirstOrDefault() ?? typeof(object);
+
+            if (typeof(Exception).IsAssignableFrom(t))
+            {
+                //TODO: Wrap exceptions in Json-friendly format
+                throw JsonConvert.DeserializeObject(val["ReturnJson"], t) as Exception;
+            } else {
+                return (true, JsonConvert.DeserializeObject(val["ReturnJson"], t));
+            }
         }
     }
 }

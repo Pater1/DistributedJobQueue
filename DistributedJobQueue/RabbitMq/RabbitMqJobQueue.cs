@@ -68,11 +68,6 @@ namespace DistributedJobQueue.RabbitMq
             return Task.FromResult(true);
         }
 
-        public async Task<bool> WaitForCompletionAsync(Guid jobId)
-        {
-            throw new NotImplementedException();
-        }
-
         public void Dispose()
         {
             Channel.Close();
@@ -80,6 +75,11 @@ namespace DistributedJobQueue.RabbitMq
         }
 
         public Task<(bool, IJob)> TryDequeueAsync(IEnumerable<IFulfillment> requirementsFulfillable = null)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<(bool, object)> WaitForReturnValueAsync(Guid awaitingJobId, Guid jobToAwaitId)
         {
             throw new NotImplementedException();
         }
