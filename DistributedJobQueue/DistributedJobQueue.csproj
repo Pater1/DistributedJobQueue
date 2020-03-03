@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="C:\Users\adrian\Desktop\AutoRequeueJob.cs" Link="AutoRequeueJob.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="AsyncEnumerator" Version="4.0.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.1.2" />
     <PackageReference Include="morelinq" Version="3.3.2" />

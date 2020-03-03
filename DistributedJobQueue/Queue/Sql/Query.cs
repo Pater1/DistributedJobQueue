@@ -76,7 +76,7 @@ namespace DistributedJobQueue.Queue.Sql
                 Dictionary<string, string> ret = new Dictionary<string, string>();
                 for (int i = 0; i < x.FieldCount; i++)
                 {
-                    ret.Add(x.GetName(i), x.GetValue(i).ToString());
+                    ret.Add(x.GetName(i).ToLower(), x.GetValue(i).ToString().ToLower());
                 }
                 return ret;
             });

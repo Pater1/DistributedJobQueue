@@ -11,7 +11,7 @@ namespace DistributedJobQueue.Queue
     public interface IJobQueue
     {
         Task<bool> TryEnqueueAsync(IJob job);
-        Task<(bool, object)> WaitForReturnValueAsync(Guid awaitingJobId, Guid jobToAwaitId);
+        Task<bool> WaitForCompletionAsync(Guid jobId);
         Task<(bool, IJob)> TryDequeueAsync(IEnumerable<IFulfillment> requirementsFulfillable = null);
     }
 }
