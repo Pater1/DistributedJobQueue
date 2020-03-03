@@ -48,7 +48,7 @@ namespace DistributedJobQueue.Queue.Sql
                 }
             }
         }
-        public IEnumerable<IDataRecord> EnumerateRaw()
+        public IEnumerable<IDataRecord> EnumerateRaw(bool cacheResults = true)
         {
             using (Conn connection = ConnectionFactory())
             {
@@ -59,7 +59,17 @@ namespace DistributedJobQueue.Queue.Sql
                     command.CommandText = Queary;
                     using (DbDataReader dataReader = command.ExecuteReader())
                     {
-                        return dataReader.Cast<IDataRecord>().ToList();
+                        //var v = dataReader.Cast<IDataRecord>();
+                        //if (cacheResults)
+                        //{
+                        //    v = v.ToList();
+                        //}
+                        //return v;
+
+                        foreach(IDataRecord dataRecord in dataReader.Cast<IDataRecord>())
+                        {
+                            yield return dataRecord;
+                        }
                     }
                 }
             }
