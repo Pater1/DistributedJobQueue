@@ -16,6 +16,16 @@ namespace DistributedJobQueue.Queue
             )).Where(x => !x).Any();
         }
 
+        public static async Task<bool> EnqueueAndWaitForCompletionAsync(this IJobQueue queue, IJob jobWaiting, IJob jobToWaitFor)
+        {
+            if(jobToWaitFor.JobId == default)
+            {
+                jobToWaitFor.JobId = Guid.NewGuid();
+            }
+            return await queue.TryEnqueueAsync(jobToWaitFor) 
+                && await queue.WaitForCompletionAsync(jobWaiting.JobId, jobToWaitFor.JobId);
+        }
+
         public static Task<bool> WaitForCompletionAsync(this IJobQueue queue, IJob jobWaiting, IJob jobToWaitFor) => queue.WaitForCompletionAsync(jobWaiting.JobId, jobToWaitFor.JobId);
         public static Task<bool> WaitForCompletionAsync(this IJobQueue queue, IJob jobWaiting, Guid jobToWaitForId) => queue.WaitForCompletionAsync(jobWaiting.JobId, jobToWaitForId);
         public static Task<bool> WaitForCompletionAsync(this IJobQueue queue, Guid jobWaitingId, IJob jobToWaitFor) => queue.WaitForCompletionAsync(jobWaitingId, jobToWaitFor.JobId);
