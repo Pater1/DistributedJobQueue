@@ -61,7 +61,7 @@ namespace DistributedJobQueue.RabbitMq
 
             props.Headers = new Dictionary<string, object>();
             props.Headers.Add("jobId", job.JobId.ToString());
-            props.Headers.Add("requirementTags", job.Requirement.GetRequirementTags().Aggregate((a, b) => $"{a},{b}"));
+            props.Headers.Add("requirementTags", job.ReadRequirement.GetRequirementTags().Aggregate((a, b) => $"{a},{b}"));
 
             Channel.BasicPublish(ExchangeName, RoutingKey, props, messageBodyBytes);
 

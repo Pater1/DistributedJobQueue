@@ -26,7 +26,7 @@ namespace DistributedJobQueue.Queue
 
             foreach ((IJob jb, int i) jbi in sudoQueue.Select((x,i) => (x,i)).Where(x => x.Item1.reqTags.ContainsAll(fulTags)).Select(x => (x.Item1.job, x.Item2)))
             {
-                if (await (jbi.jb.Requirement ?? new NoRequirement()).FulfilledByAsync(fulfillments))
+                if (await (jbi.jb.ReadRequirement ?? new NoRequirement()).FulfilledByAsync(fulfillments))
                 {
                     job = jbi.jb;
                     index = jbi.i;
@@ -58,7 +58,7 @@ namespace DistributedJobQueue.Queue
             alreadyContains = sudoQueue.Select(x => x.job.JobId).Contains(job.JobId);
             if (!alreadyContains)
             {
-                sudoQueue.Add(((job.Requirement ?? new NoRequirement()).GetRequirementTags(), job));
+                sudoQueue.Add(((job.ReadRequirement ?? new NoRequirement()).GetRequirementTags(), job));
             }
 
             locker.Release();

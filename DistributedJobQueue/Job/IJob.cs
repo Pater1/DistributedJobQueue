@@ -9,7 +9,7 @@ namespace DistributedJobQueue.Job
     public interface IJob
     {
         Guid JobId { get; set; }
-        IRequirement Requirement { get; set; }
+        IRequirement ReadRequirement { get; set; }
         Task<IEnumerable<IJob>> Run();
     }
 }

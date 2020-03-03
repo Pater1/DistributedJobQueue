@@ -13,12 +13,12 @@ namespace DistributedJobQueue.Job
         public SerialJob(IRequirement requirement, IEnumerable<IJob> serJobs)
         {
             this.JobId = default;
-            this.Requirement = requirement;
+            this.ReadRequirement = requirement;
             this.SerJobs = serJobs;
         }
 
         public Guid JobId { get; set; }
-        public IRequirement Requirement { get; set; }
+        public IRequirement ReadRequirement { get; set; }
         public IEnumerable<IJob> SerJobs { get; set; }
 
         public async Task<IEnumerable<IJob>> Run()

@@ -14,12 +14,12 @@ namespace DistributedJobQueue.Job
         public ParallelJob(IRequirement requirement, IEnumerable<IJob> parJobs)
         {
             this.JobId = default;
-            this.Requirement = requirement;
+            this.ReadRequirement = requirement;
             this.ParJobs = parJobs;
         }
 
         public Guid JobId { get; set; }
-        public IRequirement Requirement { get; set; }
+        public IRequirement ReadRequirement { get; set; }
         public IEnumerable<IJob> ParJobs { get; set; }
 
         public async Task<IEnumerable<IJob>> Run()
