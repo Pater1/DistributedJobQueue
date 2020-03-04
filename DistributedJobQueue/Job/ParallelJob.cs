@@ -11,21 +11,15 @@ namespace DistributedJobQueue.Job
 {
     public struct ParallelJob : IJob
     {
-        public ParallelJob( IEnumerable<IJob> parJobs)
+        public ParallelJob(IRequirement requirement, IEnumerable<IJob> parJobs)
         {
             this.JobId = default;
-            this.Requirement = new NoRequirement();
-            this.ParJobs = parJobs;
-        }
-        public ParallelJob( params IJob[] parJobs)
-        {
-            this.JobId = default;
-            this.Requirement = new NoRequirement();
+            this.ReadRequirement = requirement;
             this.ParJobs = parJobs;
         }
 
         public Guid JobId { get; set; }
-        public IRequirement Requirement { get; set; }
+        public IRequirement ReadRequirement { get; set; }
         public IEnumerable<IJob> ParJobs { get; set; }
 
         public async Task<IEnumerable<IJob>> Run()

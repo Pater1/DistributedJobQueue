@@ -10,14 +10,14 @@ namespace DistributedJobQueue.Job
     {
         public Guid JobId { get; set; }
         public Guid ReturnJobId { get; set; }
-        public IRequirement Requirement { get; set; }
+        public IRequirement ReadRequirement { get; set; }
         public T ReturnValue { get; set; }
 
         public ReturnValueJob(Guid jobId, IRequirement requirement, T returnValue)
         {
             JobId = new Guid();
             ReturnJobId = jobId;
-            Requirement = requirement == null? new NoRequirement(): requirement;
+            ReadRequirement = requirement == null? new NoRequirement(): requirement;
             ReturnValue = returnValue;
         }
 

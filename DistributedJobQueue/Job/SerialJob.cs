@@ -10,22 +10,15 @@ namespace DistributedJobQueue.Job
 {
     public struct SerialJob : IJob
     {
-        public SerialJob( IEnumerable<IJob> serJobs)
+        public SerialJob(IRequirement requirement, IEnumerable<IJob> serJobs)
         {
             this.JobId = default;
-            this.Requirement = new NoRequirement();
-            this.SerJobs = serJobs;
-        }
-
-        public SerialJob(params IJob[] serJobs)
-        {
-            this.JobId = default;
-            this.Requirement = new NoRequirement();
+            this.ReadRequirement = requirement;
             this.SerJobs = serJobs;
         }
 
         public Guid JobId { get; set; }
-        public IRequirement Requirement { get; set; }
+        public IRequirement ReadRequirement { get; set; }
         public IEnumerable<IJob> SerJobs { get; set; }
 
         public async Task<IEnumerable<IJob>> Run()

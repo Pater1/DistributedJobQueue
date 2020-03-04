@@ -17,7 +17,7 @@ namespace DistributedJobQueue.Job.Wrappers
         }
 
         public Guid JobId { get => BaseJob.JobId; set => BaseJob.JobId = value; }
-        public IRequirement Requirement { get => BaseJob.Requirement; set => BaseJob.Requirement = value; }
+        public IRequirement ReadRequirement { get => BaseJob.ReadRequirement; set => BaseJob.ReadRequirement = value; }
         
         public IJob BaseJob { get; set; }
 

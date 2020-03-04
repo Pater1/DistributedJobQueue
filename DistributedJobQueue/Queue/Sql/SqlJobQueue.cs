@@ -65,7 +65,7 @@ namespace DistributedJobQueue.Queue.Sql
                     })
                     .Where(x => x.success)
                     .Select(async x => 
-                        (x.jb, x.x, await x.jb.Requirement.FulfilledByAsync(fulfillments))
+                        (x.jb, x.x, await x.jb.ReadRequirement.FulfilledByAsync(fulfillments))
                     )
                 ))
                 .Where(x => x.Item3)                      

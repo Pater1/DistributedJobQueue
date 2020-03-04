@@ -40,7 +40,7 @@ namespace DistributedJobQueue.Queue.Sql
                     job.GetType().Name,
                     JsonConvert.SerializeObject(job, sqlJsonSerializerSettings)
                 ),
-                job.Requirement.GetRequirementTags().Select(x =>
+                job.ReadRequirement.GetRequirementTags().Select(x =>
                     new SqlRequirement(
                         jbId,
                         x
