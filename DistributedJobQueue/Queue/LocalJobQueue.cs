@@ -66,19 +66,16 @@ namespace DistributedJobQueue.Queue
             return !alreadyContains;
         }
 
-        public async Task<(bool, object)> WaitForReturnValueAsync(Guid awaitingJobId, Guid jobToAwaitId)
+        public async Task<bool> WaitForCompletionAsync(Guid jobId)
         {
-            if (awaitingJobId == jobToAwaitId)
-            {
-                throw new ArgumentException($"A job cannot await itself. jobId: {awaitingJobId.ToString()}");
-            }
+            //TODO: detect if job asks to wait on itself & error
 
-            while (InProcess.Contains(jobToAwaitId))
+            while (InProcess.Contains(jobId))
             {
                 await Task.Delay(10);
             }
 
-            return (true, null);
+            return true;
         }
     }
 }
